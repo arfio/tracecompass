@@ -30,7 +30,9 @@ import org.eclipse.tracecompass.internal.tmf.ui.widgets.timegraph.model.TimeLine
 import org.eclipse.tracecompass.statesystem.core.StateSystemUtils;
 import org.eclipse.tracecompass.tmf.core.dataprovider.DataProviderManager;
 import org.eclipse.tracecompass.tmf.core.model.filters.SelectionTimeQueryFilter;
+import org.eclipse.tracecompass.tmf.core.model.filters.TimeQueryFilter;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.IFilterProperty;
+import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphArrow;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphDataProvider;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphRowModel;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphState;
@@ -46,6 +48,7 @@ import org.eclipse.tracecompass.tmf.core.statesystem.TmfStateSystemAnalysisModul
 import org.eclipse.tracecompass.tmf.core.trace.ITmfTrace;
 import org.eclipse.tracecompass.tmf.ui.views.timegraph.AbstractTimeGraphView;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.TimeGraphPresentationProvider;
+import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.ILinkEvent;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.ITimeEvent;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.ITimeGraphEntry;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.NamedTimeEvent;
@@ -53,6 +56,7 @@ import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.NullTimeEvent;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.TimeEvent;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.TimeGraphEntry;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.TimeGraphEntry.Sampling;
+import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.TimeLinkEvent;
 
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.HashMultimap;
@@ -490,6 +494,40 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
             }
         }
         return providersToModelIds;
+    }
+
+    @Override
+    protected @NonNull List<@NonNull ILinkEvent> getLinkList(long zoomStartTime, long zoomEndTime, long resolution,
+            @NonNull IProgressMonitor monitor) {
+        ITmfTrace trace = getTrace();
+        List<@NonNull TimeGraphEntry> traceEntries = getEntryList(trace);
+        if (trace == null || traceEntries == null) {
+            return Collections.emptyList();
+        }
+        List<@NonNull ILinkEvent> linkList = new ArrayList<>();
+        List<@NonNull Long> times = StateSystemUtils.getTimes(zoomStartTime, zoomEndTime, resolution);
+        TimeQueryFilter queryFilter = new TimeQueryFilter(times);
+
+        Table<TraceEntry, DPEntry, DataProviderEntries> currentEntries = getCurrentEntriesForTrace(trace);
+        for (DataProviderEntries key : currentEntries.values()) {
+            ITmfTreeDataProvider<?> provider = key.getDpEntry().getProvider();
+            if (provider instanceof ITimeGraphDataProvider) {
+                ITimeGraphDataProvider<? extends TimeGraphEntryModel> dataProvider = (ITimeGraphDataProvider<? extends TimeGraphEntryModel>) provider;
+                TmfModelResponse<List<ITimeGraphArrow>> response = dataProvider.fetchArrows(queryFilter, monitor);
+                List<ITimeGraphArrow> model = response.getModel();
+
+                if (model != null) {
+                    for (ITimeGraphArrow arrow : model) {
+                        ITimeGraphEntry prevEntry = key.get(arrow.getSourceId());
+                        ITimeGraphEntry nextEntry = key.get(arrow.getDestinationId());
+                        if (prevEntry != null && nextEntry != null) {
+                            linkList.add(new TimeLinkEvent(prevEntry, nextEntry, arrow.getStartTime(), arrow.getDuration(), arrow.getValue()));
+                        }
+                    }
+                }
+            }
+        }
+        return linkList;
     }
 
     /*
