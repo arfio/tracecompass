@@ -141,9 +141,6 @@ public interface ITimeGraphEntry extends ISelection {
     }
 
     /**
-     * Get the style of entry this represents
-     *
-     * @return The style of the entry
      * @since 5.0
      */
     default DisplayStyle getStyle() {

@@ -183,7 +183,7 @@ public class TimeGraphEntry implements ITimeGraphEntry, IElementResolver {
      *            The end time of this entry
      */
     public TimeGraphEntry(String name, long startTime, long endTime) {
-        this(new TimeGraphEntryModel(-1, -1, Collections.singletonList(name), startTime, endTime));
+        fModel = new TimeGraphEntryModel(-1, -1, name, startTime, endTime);
     }
 
     /**
@@ -698,5 +698,12 @@ public class TimeGraphEntry implements ITimeGraphEntry, IElementResolver {
             return ((IElementResolver) fModel).computeData();
         }
         return Collections.emptyMap();
+    }
+
+    /**
+     * @since 5.0
+     */
+    protected void setModel(@NonNull TimeGraphEntryModel model) {
+        fModel = model;
     }
 }
