@@ -51,6 +51,7 @@ import com.google.common.collect.Maps;
  * provider can be used as is and does not need to be extended.
  *
  * @author Simon Delisle
+ * @since 5.2
  */
 public class BaseDataProviderTimeGraphPresentationProvider extends TimeGraphPresentationProvider implements ITimeGraphStylePresentationProvider {
 

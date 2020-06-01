@@ -20,18 +20,21 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
+import org.eclipse.tracecompass.internal.provisional.tmf.ui.widgets.timegraph.BaseDataProviderTimeGraphPresentationProvider;
 import org.eclipse.tracecompass.internal.tmf.core.model.xy.AbstractTreeCommonXDataProvider;
 import org.eclipse.tracecompass.internal.tmf.ui.widgets.timegraph.model.TimeLineEvent;
 import org.eclipse.tracecompass.statesystem.core.StateSystemUtils;
 import org.eclipse.tracecompass.tmf.core.dataprovider.DataProviderManager;
 import org.eclipse.tracecompass.tmf.core.dataprovider.DataProviderParameterUtils;
 import org.eclipse.tracecompass.tmf.core.dataprovider.IDataProviderDescriptor;
-import org.eclipse.tracecompass.tmf.core.model.filters.TimeQueryFilter;
+import org.eclipse.tracecompass.tmf.core.model.IOutputElement;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.IFilterProperty;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphArrow;
 import org.eclipse.tracecompass.tmf.core.model.timegraph.ITimeGraphDataProvider;
@@ -49,6 +52,7 @@ import org.eclipse.tracecompass.tmf.core.response.TmfModelResponse;
 import org.eclipse.tracecompass.tmf.core.statesystem.TmfStateSystemAnalysisModule;
 import org.eclipse.tracecompass.tmf.core.trace.ITmfTrace;
 import org.eclipse.tracecompass.tmf.ui.views.timegraph.AbstractTimeGraphView;
+import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.ITimeGraphPresentationProvider;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.TimeGraphPresentationProvider;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.ILinkEvent;
 import org.eclipse.tracecompass.tmf.ui.widgets.timegraph.model.ITimeEvent;
@@ -130,6 +134,35 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
         fProviderIds = providerIds;
     }
 
+    private BiFunction<ITimeEvent, Long, Map<String, String>> getTooltipResolver(ITimeGraphDataProvider<? extends TimeGraphEntryModel> provider) {
+        return (event, time) -> {
+            Long entryId = null;
+            TraceEntry traceEntry = getTraceEntry(event.getEntry());
+            DataProviderEntries dataProviderEntries = getDpEntries(traceEntry, provider, getCurrentEntriesForTrace(traceEntry.getTrace()));
+            for (Entry<Long, TimeGraphEntry> entry: dataProviderEntries.getEntries().entrySet()) {
+                if (entry.getValue() == event.getEntry()) {
+                    entryId = entry.getKey();
+                }
+            }
+            if (entryId == null) {
+                return Collections.emptyMap();
+            }
+            IOutputElement element = null;
+            if (event instanceof TimeEvent) {
+                element = ((TimeEvent) event).getModel();
+            }
+            @NonNull Map<@NonNull String, @NonNull Object> parameters = new HashMap<>();
+            parameters.put(DataProviderParameterUtils.REQUESTED_TIME_KEY, Collections.singletonList(time));
+            parameters.put(DataProviderParameterUtils.REQUESTED_ITEMS_KEY, Collections.singletonList(entryId));
+            if (element != null) {
+                parameters.put(DataProviderParameterUtils.REQUESTED_ELEMENT_KEY, element);
+            }
+            TmfModelResponse<Map<String, String>> response = provider.fetchTooltip(parameters, new NullProgressMonitor());
+            Map<String, String> tooltip = response.getModel();
+            return (tooltip == null) ? Collections.emptyMap() : tooltip;
+        };
+    }
+
     @Override
     protected void buildEntryList(@NonNull ITmfTrace trace, @NonNull ITmfTrace parentTrace, @NonNull IProgressMonitor monitor) {
         Table<TraceEntry, DPEntry, DataProviderEntries> currentEntries = getCurrentEntriesForTrace(parentTrace);
@@ -147,6 +180,10 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
                 List<TimeGraphEntry> entries = DiscreteDataProviderEntryProvider.getEntriesFromDataProvider(trace, parentTrace, tDataProvider, dpEntries, this, monitor);
                 for (TimeGraphEntry entry : entries) {
                     traceEntry.addChild(entry);
+                }
+                ITimeGraphPresentationProvider presentationProvider = getPresentationProvider();
+                if (presentationProvider instanceof BaseDataProviderTimeGraphPresentationProvider) {
+                    ((BaseDataProviderTimeGraphPresentationProvider) presentationProvider).addProvider(tDataProvider, getTooltipResolver(tDataProvider));
                 }
             }
             AbstractTreeCommonXDataProvider<@NonNull TmfStateSystemAnalysisModule, @NonNull ITmfTreeDataModel> xyDataProvider = dpm.getDataProvider(trace, id, AbstractTreeCommonXDataProvider.class);
@@ -480,14 +517,14 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
      * @since 3.3
      */
     protected TimeEvent createTimeEvent(TimeGraphEntry entry, ITimeGraphState state) {
-        if (state.getValue() == Integer.MIN_VALUE) {
+        String label = state.getLabel();
+        if (state.getValue() == Integer.MIN_VALUE && label == null && state.getStyle() == null) {
             return new NullTimeEvent(entry, state.getStartTime(), state.getDuration());
         }
-        String label = state.getLabel();
         if (label != null) {
-            return new NamedTimeEvent(entry, state.getStartTime(), state.getDuration(), state.getValue(), label, state.getActiveProperties());
+            return new NamedTimeEvent(entry, label, state);
         }
-        return new TimeEvent(entry, state.getStartTime(), state.getDuration(), state.getValue(), state.getActiveProperties());
+        return new TimeEvent(entry, state);
     }
 
     private Multimap<DataProviderEntries, Long> filterGroupEntries(Iterable<TimeGraphEntry> visible,
@@ -500,7 +537,7 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
         }
         for (TimeGraphEntry entry : visible) {
             if (zoomStartTime <= entry.getEndTime() && zoomEndTime >= entry.getStartTime() && entry.hasTimeEvents()) {
-                long id = entry.getModel().getId();
+                long id = entry.getEntryModel().getId();
                 DataProviderEntries providerEntry = getProviderEntry(entry, currentEntries);
                 providersToModelIds.put(providerEntry, id);
             }
@@ -518,14 +555,15 @@ public class DataProviderBaseView extends AbstractTimeGraphView {
         }
         List<@NonNull ILinkEvent> linkList = new ArrayList<>();
         List<@NonNull Long> times = StateSystemUtils.getTimes(zoomStartTime, zoomEndTime, resolution);
-        TimeQueryFilter queryFilter = new TimeQueryFilter(times);
+        @NonNull Map<@NonNull String, @NonNull Object> parameters = new HashMap<>();
+        parameters.put(DataProviderParameterUtils.REQUESTED_TIME_KEY, times);
 
         Table<TraceEntry, DPEntry, DataProviderEntries> currentEntries = getCurrentEntriesForTrace(trace);
         for (DataProviderEntries key : currentEntries.values()) {
             ITmfTreeDataProvider<?> provider = key.getDpEntry().getProvider();
             if (provider instanceof ITimeGraphDataProvider) {
                 ITimeGraphDataProvider<? extends TimeGraphEntryModel> dataProvider = (ITimeGraphDataProvider<? extends TimeGraphEntryModel>) provider;
-                TmfModelResponse<List<ITimeGraphArrow>> response = dataProvider.fetchArrows(queryFilter, monitor);
+                TmfModelResponse<List<ITimeGraphArrow>> response = dataProvider.fetchArrows(parameters, monitor);
                 List<ITimeGraphArrow> model = response.getModel();
 
                 if (model != null) {
