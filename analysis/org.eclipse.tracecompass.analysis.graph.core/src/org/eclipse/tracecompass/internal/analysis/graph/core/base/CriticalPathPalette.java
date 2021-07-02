@@ -13,7 +13,7 @@ package org.eclipse.tracecompass.internal.analysis.graph.core.base;
 
 import java.util.Map;
 
-import org.eclipse.tracecompass.analysis.graph.core.base.TmfEdge.EdgeType;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdge.EdgeType;
 import org.eclipse.tracecompass.tmf.core.model.OutputElementStyle;
 
 import com.google.common.collect.ImmutableMap;

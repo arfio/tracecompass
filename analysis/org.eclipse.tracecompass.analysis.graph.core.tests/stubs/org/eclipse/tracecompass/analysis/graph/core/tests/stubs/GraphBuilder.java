@@ -11,7 +11,7 @@
 
 package org.eclipse.tracecompass.analysis.graph.core.tests.stubs;
 
-import org.eclipse.tracecompass.analysis.graph.core.base.TmfGraph;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
 
 /**
  * Base class for graph building graph test data
@@ -46,14 +46,14 @@ public abstract class GraphBuilder {
      *
      * @return The full graph of the test case
      */
-    public abstract TmfGraph build();
+    public abstract ITmfGraph build();
 
     /**
      * Computes the critical path with bounded algorithm
      *
      * @return The graph corresponding to the Bounded critical path algorithm
      */
-    public abstract TmfGraph criticalPathBounded();
+    public abstract ITmfGraph criticalPathBounded();
 
     /**
      * Computes the critical path with unbounded algorithm
@@ -61,6 +61,6 @@ public abstract class GraphBuilder {
      * @return The graph corresponding to the result of the Unbounded critical
      *         path algorithm
      */
-    public abstract TmfGraph criticalPathUnbounded();
+    public abstract ITmfGraph criticalPathUnbounded();
 
 }

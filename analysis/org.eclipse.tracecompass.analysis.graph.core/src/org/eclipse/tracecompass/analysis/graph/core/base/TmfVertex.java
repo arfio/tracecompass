@@ -20,6 +20,8 @@ import java.util.Objects;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.tracecompass.analysis.graph.core.base.TmfEdge.EdgeType;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfVertex;
 import org.eclipse.tracecompass.internal.analysis.graph.core.base.Messages;
 
 /**
@@ -27,7 +29,13 @@ import org.eclipse.tracecompass.internal.analysis.graph.core.base.Messages;
  *
  * @author Francis Giraldeau
  * @author Geneviève Bastien
+ * @deprecated Use {@link ITmfVertex} instead and to create new vertices
+ *             {@link ITmfGraph#createVertex(IGraphWorker, long)}. Getting edges
+ *             to/from vertices can be done via the
+ *             {@link ITmfGraph#getEdgeFrom(ITmfVertex, org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph.EdgeDirection)}
+ *             method
  */
+@Deprecated
 public class TmfVertex implements Comparable<TmfVertex> {
 
     private static final String UNKNOWN_EDGE_DIRECTION_TYPE = "Unknown edge direction type : "; //$NON-NLS-1$

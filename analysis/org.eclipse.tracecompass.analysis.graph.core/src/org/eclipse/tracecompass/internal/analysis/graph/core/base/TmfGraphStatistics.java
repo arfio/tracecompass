@@ -32,7 +32,9 @@ import org.eclipse.tracecompass.analysis.graph.core.base.TmfVertex;
  * @author Francis Giraldeau
  * @author Geneviève Bastien
  * @author Matthew Khouzam
+ * @deprecated Use the one from o.e.t.internal.graph.core.graph
  */
+@Deprecated
 public class TmfGraphStatistics implements ITmfGraphVisitor {
 
     private final Map<IGraphWorker, Long> fWorkerStats;

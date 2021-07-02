@@ -18,6 +18,8 @@ package org.eclipse.tracecompass.analysis.graph.core.base;
 import java.util.Map;
 
 import org.eclipse.jdt.annotation.Nullable;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdge;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
 import org.eclipse.tracecompass.internal.analysis.graph.core.base.Messages;
 import org.eclipse.tracecompass.tmf.core.dataprovider.X11ColorUtils;
 import org.eclipse.tracecompass.tmf.core.model.StyleProperties;
@@ -29,7 +31,10 @@ import com.google.common.collect.ImmutableMap;
  *
  * @author Francis Giraldeau
  * @author Geneviève Bastien
+ * @deprecated Use the {@link ITmfEdge} instead and the {@link ITmfGraph}
+ *             interface to create edges.
  */
+@Deprecated
 public class TmfEdge {
 
     /**
