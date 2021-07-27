@@ -35,6 +35,22 @@ public class TestGraphWorker implements IGraphWorker {
         fValue = i;
     }
 
+    /**
+     * Default constructor (for deserialization)
+     */
+    public TestGraphWorker() {
+        fValue = 0;
+    }
+
+    /**
+     * Get the value of this worker
+     *
+     * @return The worker value
+     */
+    public int getValue() {
+        return fValue;
+    }
+
     @Override
     public String getHostId() {
         return "test";
@@ -52,4 +68,11 @@ public class TestGraphWorker implements IGraphWorker {
         }
         return false;
     }
+
+    @Override
+    public String toString() {
+        return "workerValue: " + fValue;
+    }
+
+
 }
