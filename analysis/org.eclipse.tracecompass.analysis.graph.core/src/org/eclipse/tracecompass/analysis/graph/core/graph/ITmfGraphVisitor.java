@@ -15,7 +15,7 @@ package org.eclipse.tracecompass.analysis.graph.core.graph;
  * Interface for all graph visitors. Using on the graph exploration method, the
  * visit methods will be called for each vertex and edge visited
  *
- * @since 3.1
+ * @since 3.2
  */
 public interface ITmfGraphVisitor {
 

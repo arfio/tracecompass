@@ -1,14 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2015 École Polytechnique de Montréal
- *
- * All rights reserved. This program and the accompanying materials are
- * made available under the terms of the Eclipse Public License 2.0 which
- * accompanies this distribution, and is available at
- * https://www.eclipse.org/legal/epl-2.0/
- *
- * SPDX-License-Identifier: EPL-2.0
- *******************************************************************************/
-
 package org.eclipse.tracecompass.internal.analysis.graph.core.criticalpath;
 
 import static org.eclipse.tracecompass.common.core.NonNullUtils.checkNotNull;
@@ -21,96 +10,43 @@ import java.util.List;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.tracecompass.analysis.graph.core.base.IGraphWorker;
-import org.eclipse.tracecompass.analysis.graph.core.base.TmfGraph;
-import org.eclipse.tracecompass.analysis.graph.core.base.TmfVertex;
 import org.eclipse.tracecompass.analysis.graph.core.criticalpath.CriticalPathAlgorithmException;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdge;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfVertex;
-import org.eclipse.tracecompass.analysis.graph.core.graph.TmfEdgeState;
+import org.eclipse.tracecompass.internal.analysis.graph.core.graph.legacy.OSEdgeContextState.OSEdgeContextEnum;
 
-/**
- * Critical path bounded algorithm: backward resolution of blocking limited to
- * the blocking window
- *
- * This algorithm is described in
- *
- * F. Giraldeau and M.Dagenais, Wait analysis of distributed systems using
- * kernel tracing, IEEE Transactions on Parallel and Distributed Systems
- *
- * @author Francis Giraldeau
- */
-public class CriticalPathAlgorithmBounded extends AbstractCriticalPathAlgorithm {
+public class OSCriticalPathAlgorithm extends CriticalPathAlgorithmBounded {
 
-    /**
-     * Constructor
-     *
-     * @param graph
-     *            The graph on which to calculate the critical path
-     */
-    public CriticalPathAlgorithmBounded(ITmfGraph graph) {
+    public OSCriticalPathAlgorithm(ITmfGraph graph) {
         super(graph);
     }
 
-    @Deprecated
+    /**
+     * Find the next incoming vertex from another object (in vertical) from a
+     * node in a given direction
+     *
+     * @param vertex
+     *            The starting vertex
+     * @param dir
+     *            The direction in which to search
+     * @return The next incoming vertex
+     */
     @Override
-    public TmfGraph compute(TmfVertex start, @Nullable TmfVertex end) throws CriticalPathAlgorithmException {
-        throw new UnsupportedOperationException("Old and new implementations are incompatible"); //$NON-NLS-1$
-    }
-
-    /** Add the links to the critical path, with currentVertex to glue to */
-    protected void appendPathComponent(ITmfGraph criticalPath, ITmfGraph graph, ITmfVertex currentVertex, List<ITmfEdge> links) {
-        IGraphWorker currentActor = checkNotNull(graph.getParentOf(currentVertex));
-        if (links.isEmpty()) {
-            /*
-             * The next vertex should not be null, since we glue only after
-             * resolve of the blocking of the edge to that vertex
-             */
-            ITmfEdge next = graph.getEdgeFrom(currentVertex, ITmfGraph.EdgeDirection.OUTGOING_HORIZONTAL_EDGE);
-            if (next == null) {
-                return;
+    public @Nullable ITmfVertex findIncoming(ITmfVertex vertex, ITmfGraph.EdgeDirection dir) {
+        ITmfVertex currentVertex = vertex;
+        while (true) {
+            ITmfEdge incoming = getGraph().getEdgeFrom(vertex, ITmfGraph.EdgeDirection.INCOMING_VERTICAL_EDGE);
+            if (incoming != null) {
+                return currentVertex;
             }
-            criticalPath.append(criticalPath.createVertex(currentActor, next.getVertexTo().getTimestamp()), next.getEdgeContextState(), next.getLinkQualifier());
-            return;
-        }
-        // FIXME: assert last link.to actor == currentActor
-
-        // attach subpath to b1
-        ITmfVertex b1 = checkNotNull(criticalPath.getTail(currentActor));
-        if (b1 == null) {
-            throw new NullPointerException("Oups! null tail!");
-        }
-
-        // glue head
-        ITmfEdge lnk = links.get(0);
-        ITmfVertex anchor = null;
-        IGraphWorker objSrc = checkNotNull(graph.getParentOf(lnk.getVertexFrom()));
-        if (objSrc.equals(currentActor)) {
-            anchor = b1;
-        } else {
-            anchor = criticalPath.createVertex(objSrc, currentVertex.getTimestamp());
-            criticalPath.add(anchor);
-            criticalPath.edge(b1, anchor);
-            /* fill any gap with UNKNOWN */
-            if (lnk.getVertexFrom().compareTo(anchor) > 0) {
-                anchor = criticalPath.createVertex(objSrc, lnk.getVertexFrom().getTimestamp());
-                checkNotNull(criticalPath.appendUnknown(anchor));
+            ITmfEdge edge = getGraph().getEdgeFrom(vertex, dir);
+            if (edge == null || edge.getEdgeContextState().getContextEnum() != OSEdgeContextEnum.EPS) {
+                break;
             }
+            currentVertex = getNeighborFromEdge(edge, dir);
         }
-
-        // glue body
-        ITmfEdge prev = null;
-        for (ITmfEdge link : links) {
-            // check connectivity
-            if (prev != null && (!prev.getVertexTo().equals(link.getVertexFrom()))) {
-                anchor = copyLink(criticalPath, graph, anchor, prev.getVertexTo(), link.getVertexFrom(),
-                        Math.max(prev.getVertexTo().getTimestamp(), link.getVertexFrom().getTimestamp()),
-                        null, link.getLinkQualifier());
-            }
-            anchor = copyLink(criticalPath, graph, anchor, link.getVertexFrom(), link.getVertexTo(),
-                    link.getVertexTo().getTimestamp(), link.getEdgeContextState(), link.getLinkQualifier());
-            prev = link;
-        }
+        return null;
     }
 
     /**
@@ -127,6 +63,7 @@ public class CriticalPathAlgorithmBounded extends AbstractCriticalPathAlgorithm 
      *            blocking
      * @return The list of non-blocking edges
      */
+    @Override
     protected List<ITmfEdge> resolveBlockingBounded(ITmfEdge blocking, ITmfVertex bound) {
 
         ITmfGraph graph = getGraph();
@@ -192,13 +129,17 @@ public class CriticalPathAlgorithmBounded extends AbstractCriticalPathAlgorithm 
              * twice
              */
             ITmfEdge incomingEdge = graph.getEdgeFrom(vertexFrom, ITmfGraph.EdgeDirection.INCOMING_HORIZONTAL_EDGE);
-            if (inVerticalEdge != null && (incomingEdge == null || incomingEdge.getEdgeContextState().getEdgeState() != TmfEdgeState.STOP)) {
+            if (inVerticalEdge != null &&
+                    (incomingEdge == null ||
+                            (incomingEdge.getEdgeContextState().getContextEnum() != OSEdgeContextEnum.BLOCKED &&
+                            incomingEdge.getEdgeContextState().getContextEnum() != OSEdgeContextEnum.NETWORK))) {
                 stack.addFirst(vertexFrom);
             }
             if (incomingEdge != null) {
-                if (incomingEdge.getEdgeContextState().getEdgeState() == TmfEdgeState.STOP) {
+                if (incomingEdge.getEdgeContextState().getContextEnum() == OSEdgeContextEnum.BLOCKED ||
+                        incomingEdge.getEdgeContextState().getContextEnum() == OSEdgeContextEnum.NETWORK) {
                     List<ITmfEdge> blockings = resolveBlockingBounded(incomingEdge, currentBound);
-                    if (blockings.isEmpty() && incomingEdge.getEdgeContextState().isMatchable()) {
+                    if (blockings.isEmpty() && incomingEdge.getEdgeContextState().getContextEnum() == OSEdgeContextEnum.NETWORK) {
                         // There's no explanation for the blocking, keep this
                         // edge if it's network, let the algorithm stitch this
                         // otherwise
@@ -259,8 +200,15 @@ public class CriticalPathAlgorithmBounded extends AbstractCriticalPathAlgorithm 
             if (nextVertex.getTimestamp() >= endTime) {
                 break;
             }
-            switch (nextEdge.getEdgeContextState().getEdgeState()) {
-            case PASS:
+            switch ((OSEdgeContextEnum) nextEdge.getEdgeContextState().getContextEnum()) {
+            case IPI:
+            case USER_INPUT:
+            case BLOCK_DEVICE:
+            case TIMER:
+            case INTERRUPTED:
+            case PREEMPTED:
+            case RUNNING:
+            case UNKNOWN:
                 /**
                  * This edge is not blocked, so nothing to resolve, just add the
                  * edge to the critical path
@@ -276,22 +224,29 @@ public class CriticalPathAlgorithmBounded extends AbstractCriticalPathAlgorithm 
                 ITmfVertex vertex = criticalPath.createVertex(parentTo, nextEdge.getVertexTo().getTimestamp());
                 criticalPath.append(vertex, nextEdge.getEdgeContextState(), nextEdge.getLinkQualifier());
                 break;
-            case STOP:
+            case NETWORK:
+            case BLOCKED:
                 List<ITmfEdge> links = resolveBlockingBounded(nextEdge, nextEdge.getVertexFrom());
                 Collections.reverse(links);
                 appendPathComponent(criticalPath, graph, currentVertex, links);
                 break;
-            case UNKNOWN:
-            default:
+            case EPS:
+                if (nextEdge.getDuration() != 0) {
+                    throw new CriticalPathAlgorithmException("epsilon duration is not zero " + nextEdge); //$NON-NLS-1$
+                }
+                break;
+            case DEFAULT:
                 throw new CriticalPathAlgorithmException("Illegal link type " + nextEdge.getEdgeContextState().getContextEnum()); //$NON-NLS-1$
+            case NO_EDGE:
+            default:
+                break;
             }
             currentVertex = nextVertex;
             nextEdge = graph.getEdgeFrom(currentVertex, ITmfGraph.EdgeDirection.OUTGOING_HORIZONTAL_EDGE);
-            if (nextEdge != null) {
+            if (nextEdge != null && nextEdge.getEdgeContextState().getContextEnum() == OSEdgeContextEnum.NO_EDGE) {
                 nextEdge = null;
             }
         }
         return criticalPath;
     }
-
 }

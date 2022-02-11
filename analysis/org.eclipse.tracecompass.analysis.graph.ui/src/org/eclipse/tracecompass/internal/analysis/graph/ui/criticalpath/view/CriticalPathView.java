@@ -26,7 +26,7 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.dialogs.IDialogSettings;
-import org.eclipse.tracecompass.analysis.graph.core.criticalpath.CriticalPathModule;
+import org.eclipse.tracecompass.analysis.graph.core.criticalpath.AbstractCriticalPathModule;
 import org.eclipse.tracecompass.internal.analysis.graph.core.dataprovider.CriticalPathDataProvider;
 import org.eclipse.tracecompass.internal.analysis.graph.core.dataprovider.CriticalPathEntry;
 import org.eclipse.tracecompass.internal.analysis.graph.ui.Activator;
@@ -202,8 +202,8 @@ public class CriticalPathView extends BaseDataProviderTimeGraphView {
     @TmfSignalHandler
     public void analysisStarted(TmfStartAnalysisSignal signal) {
         IAnalysisModule analysis = signal.getAnalysisModule();
-        if (analysis instanceof CriticalPathModule) {
-            CriticalPathModule criticalPath = (CriticalPathModule) analysis;
+        if (analysis instanceof AbstractCriticalPathModule) {
+            AbstractCriticalPathModule criticalPath = (AbstractCriticalPathModule) analysis;
             /*
              * We need to wait for CriticalPathDataProviderFactory to have
              * received this signal. Create a new phaser and register, and wait

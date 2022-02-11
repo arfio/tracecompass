@@ -11,18 +11,13 @@
 
 package org.eclipse.tracecompass.analysis.graph.core.graph;
 
-import java.io.IOException;
-import java.nio.file.Path;
-
-import org.eclipse.jdt.annotation.Nullable;
-import org.eclipse.tracecompass.internal.analysis.graph.core.graph.historytree.HistoryTreeTmfGraph;
 import org.eclipse.tracecompass.internal.analysis.graph.core.graph.legacy.TmfGraphLegacyWrapper;
 
 /**
  * The factory to create execution graphs
  *
  * @author Geneviève Bastien
- * @since 3.1
+ * @since 3.2
  */
 public class TmfGraphFactory {
 
@@ -41,7 +36,7 @@ public class TmfGraphFactory {
      * @return A graph object that will save the data to disk, or
      *         <code>null</code> if the graph cannot be created.
      */
-    public static @Nullable ITmfGraph createOnDiskGraph(Path htFile, WorkerSerializer workerSerializer, long startTime, int version) {
+    /*public static @Nullable ITmfGraph createOnDiskGraph(Path htFile, WorkerSerializer workerSerializer, long startTime, int version) {
         HistoryTreeTmfGraph graph;
         try {
             graph = new HistoryTreeTmfGraph(htFile, version, workerSerializer, startTime);
@@ -50,7 +45,7 @@ public class TmfGraphFactory {
         }
 
         return graph;
-    }
+    }*/
 
     /**
      * Create an in-memory graph. If the trace is too large, building it may

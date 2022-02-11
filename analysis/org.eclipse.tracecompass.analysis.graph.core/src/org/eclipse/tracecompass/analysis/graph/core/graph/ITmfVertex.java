@@ -19,7 +19,7 @@ import java.util.Objects;
  * when some transition start/end.
  *
  * @author Geneviève Bastien
- * @since 3.1
+ * @since 3.2
  */
 public interface ITmfVertex extends Comparable<ITmfVertex> {
     /**

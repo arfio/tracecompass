@@ -20,14 +20,14 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.osgi.util.NLS;
 import org.eclipse.tracecompass.analysis.graph.core.base.IGraphWorker;
 import org.eclipse.tracecompass.analysis.graph.core.base.TmfGraph;
-import org.eclipse.tracecompass.analysis.graph.core.building.TmfGraphBuilderModule;
+import org.eclipse.tracecompass.analysis.graph.core.building.AbstractTmfGraphBuilderModule;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfVertex;
-import org.eclipse.tracecompass.analysis.graph.core.graph.TmfGraphFactory;
+import org.eclipse.tracecompass.analysis.graph.core.graph.WorkerSerializer;
 import org.eclipse.tracecompass.common.core.NonNullUtils;
 import org.eclipse.tracecompass.internal.analysis.graph.core.Activator;
-import org.eclipse.tracecompass.internal.analysis.graph.core.criticalpath.CriticalPathAlgorithmBounded;
 import org.eclipse.tracecompass.internal.analysis.graph.core.criticalpath.Messages;
+import org.eclipse.tracecompass.internal.analysis.graph.core.criticalpath.OSCriticalPathAlgorithm;
 import org.eclipse.tracecompass.tmf.core.analysis.TmfAbstractAnalysisModule;
 import org.eclipse.tracecompass.tmf.core.exceptions.TmfAnalysisException;
 import org.eclipse.tracecompass.tmf.core.trace.ITmfTrace;
@@ -40,8 +40,9 @@ import com.google.common.annotations.VisibleForTesting;
  *
  * @author Francis Giraldeau
  * @author Geneviève Bastien
+ * @since 3.2
  */
-public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICriticalPathProvider {
+public abstract class AbstractCriticalPathModule extends TmfAbstractAnalysisModule implements ICriticalPathProvider {
 
     /**
      * Analysis ID for this module
@@ -53,7 +54,7 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
 
     private static final int CRITICAL_PATH_GRAPH_VERSION = 1;
 
-    private final TmfGraphBuilderModule fGraphModule;
+    private final AbstractTmfGraphBuilderModule fGraphModule;
 
     private volatile @Nullable ITmfGraph fCriticalPath;
     private volatile boolean fScheduleOnParameterChange = true;
@@ -66,7 +67,7 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
      *            path on
      * @since 1.1
      */
-    public CriticalPathModule(TmfGraphBuilderModule graph) {
+    public AbstractCriticalPathModule(AbstractTmfGraphBuilderModule graph) {
         super();
         addParameter(PARAM_WORKER);
         setId(ANALYSIS_ID);
@@ -86,11 +87,10 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
      * @since 3.1
      */
     @VisibleForTesting
-    public CriticalPathModule(TmfGraphBuilderModule graph, IGraphWorker worker) {
+    public AbstractCriticalPathModule(AbstractTmfGraphBuilderModule graph, IGraphWorker worker) {
         this(graph);
         fScheduleOnParameterChange = false;
         setParameter(PARAM_WORKER, worker);
-
     }
 
     @Override
@@ -106,7 +106,7 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
         IGraphWorker worker = (IGraphWorker) workerObj;
 
         /* Get the graph */
-        TmfGraphBuilderModule graphModule = fGraphModule;
+        AbstractTmfGraphBuilderModule graphModule = fGraphModule;
         graphModule.schedule();
 
         monitor.setTaskName(NLS.bind(Messages.CriticalPathModule_waitingForGraph, graphModule.getName()));
@@ -139,7 +139,7 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
     }
 
     private @Nullable ITmfGraph createGraph() {
-        TmfGraphBuilderModule graphModule = fGraphModule;
+        AbstractTmfGraphBuilderModule graphModule = fGraphModule;
         ITmfTrace trace = graphModule.getTrace();
         if (trace == null) {
             throw new NullPointerException("The graph shouuld not be created if there is no trace set"); //$NON-NLS-1$
@@ -151,8 +151,14 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
         Path htFile = Paths.get(fileDirectory + id + ".ht"); //$NON-NLS-1$
 
         // Path segFile = Files.createFile(path);
-        return TmfGraphFactory.createOnDiskGraph(htFile, graphModule.getWorkerSerializer(), trace.getStartTime().toNanos(), CRITICAL_PATH_GRAPH_VERSION);
+        return createGraphInstance(htFile, graphModule.getWorkerSerializer(), trace.getStartTime().toNanos(), CRITICAL_PATH_GRAPH_VERSION);
+        //return TmfGraphFactory.createOnDiskGraph(htFile, graphModule.getWorkerSerializer(), trace.getStartTime().toNanos(), CRITICAL_PATH_GRAPH_VERSION);
     }
+
+    /**
+     * @since 3.2
+     */
+    protected abstract @Nullable ITmfGraph createGraphInstance(Path htFile, WorkerSerializer workerSerializer, long startTime, int version);
 
     @Override
     protected void canceling() {
@@ -176,7 +182,7 @@ public class CriticalPathModule extends TmfAbstractAnalysisModule implements ICr
     }
 
     private static ICriticalPathAlgorithm getAlgorithm(ITmfGraph graph) {
-        return new CriticalPathAlgorithmBounded(graph);
+        return new OSCriticalPathAlgorithm(graph);
     }
 
     @Override

@@ -16,7 +16,7 @@ import java.util.Map;
 
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
-import org.eclipse.tracecompass.analysis.graph.core.criticalpath.CriticalPathModule;
+import org.eclipse.tracecompass.analysis.graph.core.criticalpath.OSCriticalPathModule;
 import org.eclipse.tracecompass.tmf.core.analysis.IAnalysisModule;
 import org.eclipse.tracecompass.tmf.core.dataprovider.IDataProviderFactory;
 import org.eclipse.tracecompass.tmf.core.model.tree.ITmfTreeDataModel;
@@ -28,29 +28,29 @@ import org.eclipse.tracecompass.tmf.core.signal.TmfTraceClosedSignal;
 import org.eclipse.tracecompass.tmf.core.trace.ITmfTrace;
 
 /**
- * {@link IDataProviderFactory} for the {@link CriticalPathDataProvider}
+ * {@link IDataProviderFactory} for the {@link AbstractCriticalPathDataProvider}
  *
  * @author Loic Prieur-Drevon
  */
-public class CriticalPathDataProviderFactory implements IDataProviderFactory {
+public class OSCriticalPathDataProviderFactory implements IDataProviderFactory {
 
-    private final Map<ITmfTrace, CriticalPathModule> map = new HashMap<>();
+    private final Map<ITmfTrace, OSCriticalPathModule> map = new HashMap<>();
 
     /**
      * Constructor, registers the module with the {@link TmfSignalManager}
      */
-    public CriticalPathDataProviderFactory() {
+    public OSCriticalPathDataProviderFactory() {
         TmfSignalManager.register(this);
     }
 
     @Override
     public @Nullable ITmfTreeDataProvider<? extends ITmfTreeDataModel> createProvider(@NonNull ITmfTrace trace) {
-        CriticalPathModule module = map.remove(trace);
+        OSCriticalPathModule module = map.remove(trace);
         if (module == null) {
             // the DataProviderManager does not negative cache
             return null;
         }
-        return new CriticalPathDataProvider(trace, module);
+        return new OSCriticalPathDataProvider(trace, module);
     }
 
     /**
@@ -64,8 +64,8 @@ public class CriticalPathDataProviderFactory implements IDataProviderFactory {
     @TmfSignalHandler
     public synchronized void analysisStarted(TmfStartAnalysisSignal startAnalysisSignal) {
         IAnalysisModule analysis = startAnalysisSignal.getAnalysisModule();
-        if (analysis instanceof CriticalPathModule) {
-            CriticalPathModule criticalPath = (CriticalPathModule) analysis;
+        if (analysis instanceof OSCriticalPathModule) {
+            OSCriticalPathModule criticalPath = (OSCriticalPathModule) analysis;
             map.put(criticalPath.getTrace(), criticalPath);
         }
     }

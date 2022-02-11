@@ -20,7 +20,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,11 +34,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.tracecompass.analysis.graph.core.base.IGraphWorker;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdge;
-import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdge.EdgeType;
+import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfEdgeContextState;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfGraph;
 import org.eclipse.tracecompass.analysis.graph.core.graph.ITmfVertex;
 import org.eclipse.tracecompass.analysis.graph.core.graph.WorkerSerializer;
-import org.eclipse.tracecompass.common.core.NonNullUtils;
 import org.eclipse.tracecompass.internal.analysis.graph.core.Activator;
 import org.eclipse.tracecompass.internal.analysis.graph.core.base.Messages;
 import org.eclipse.tracecompass.internal.analysis.graph.core.graph.historytree.TmfEdgeInterval.EdgeIntervalType;
@@ -54,12 +52,12 @@ import com.google.common.collect.HashBiMap;
  *
  * @author Geneviève Bastien
  */
-public class HistoryTreeTmfGraph implements ITmfGraph {
+public abstract class HistoryTreeTmfGraph implements ITmfGraph {
 
     // Benchmarks have been run with different values of max children and
     // block_size and those values seem a good compromise
-    private static final int MAX_CHILDREN = 50;
-    private static final int BLOCK_SIZE = 64 * 1024;
+    public static final int MAX_CHILDREN = 50;
+    public static final int BLOCK_SIZE = 64 * 1024;
     /* "Magic number" for file sections */
     private static final int WORKER_SECTION_MAGIC_NUMBER = 0x02BEEF66;
 
@@ -114,29 +112,7 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
      *             recognized, or if the version of the file does not match the
      *             expected providerVersion.
      */
-    private GraphHistoryTree createHistoryTree(Path treeFile, int version, long startTime) throws IOException {
-
-        try {
-            if (Files.exists(treeFile)) {
-                GraphHistoryTree sht = new GraphHistoryTree(NonNullUtils.checkNotNull(treeFile.toFile()), version);
-                readWorkers(sht);
-                fFinishedBuilding = true;
-                return sht;
-            }
-        } catch (IOException e) {
-            /**
-             * Couldn't create the history tree with this file, just fall back
-             * to a new history tree and clean worker attribs
-             */
-            fWorkerAttrib.clear();
-        }
-
-        return new GraphHistoryTree(NonNullUtils.checkNotNull(treeFile.toFile()),
-                BLOCK_SIZE,
-                MAX_CHILDREN,
-                version,
-                startTime);
-    }
+    protected abstract GraphHistoryTree createHistoryTree(Path treeFile, int version, long startTime) throws IOException;
 
     /**
      * Get the History Tree built by this backend.
@@ -159,6 +135,10 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
         fFinishedBuilding = true;
     }
 
+    protected void setFinishedBuilding(boolean finishedBuilding) {
+        fFinishedBuilding = finishedBuilding;
+    }
+
     /**
      * delete the SHT files from disk
      */
@@ -173,6 +153,10 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
      */
     public long getFileSize() {
         return getSHT().getFileSize();
+    }
+
+    protected BiMap<IGraphWorker, Integer> getWorkerAttrib() {
+        return fWorkerAttrib;
     }
 
     @Override
@@ -211,17 +195,12 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
     }
 
     @Override
-    public @Nullable ITmfEdge append(ITmfVertex vertex) {
-        return append(vertex, EdgeType.DEFAULT, StringUtils.EMPTY);
+    public @Nullable ITmfEdge append(ITmfVertex vertex, ITmfEdgeContextState contextState) {
+        return append(vertex, contextState, StringUtils.EMPTY);
     }
 
     @Override
-    public @Nullable ITmfEdge append(ITmfVertex vertex, EdgeType type) {
-        return append(vertex, type, StringUtils.EMPTY);
-    }
-
-    @Override
-    public @Nullable ITmfEdge append(ITmfVertex vertex, EdgeType type, @Nullable String linkQualifier) {
+    public @Nullable ITmfEdge append(ITmfVertex vertex, ITmfEdgeContextState contextState, @Nullable String linkQualifier) {
         if (!(vertex instanceof TmfVertex)) {
             throw new IllegalArgumentException("Wrong vertex class"); //$NON-NLS-1$
         }
@@ -233,7 +212,7 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
             return null;
         }
         fCurrentWorkerLatestTime.put(attribute, (TmfVertex) vertex);
-        TmfEdgeInterval edge = latestVertex != null ? TmfEdgeInterval.horizontalEdge(latestVertex, (TmfVertex) vertex, type, linkQualifier)
+        TmfEdgeInterval edge = latestVertex != null ? TmfEdgeInterval.horizontalEdge(latestVertex, (TmfVertex) vertex, contextState, linkQualifier)
                 : fStartTime < vertex.getTimestamp() ? TmfEdgeInterval.fillerEdge((TmfVertex) vertex, fStartTime) : null;
         if (edge != null) {
             getSHT().insert(edge);
@@ -282,17 +261,12 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
     }
 
     @Override
-    public @Nullable ITmfEdge edge(ITmfVertex from, ITmfVertex to) {
-        return edge(from, to, EdgeType.DEFAULT);
+    public @Nullable ITmfEdge edge(ITmfVertex from, ITmfVertex to, ITmfEdgeContextState contextState) {
+        return edge(from, to, contextState, StringUtils.EMPTY);
     }
 
     @Override
-    public @Nullable ITmfEdge edge(ITmfVertex from, ITmfVertex to, EdgeType type) {
-        return edge(from, to, type, StringUtils.EMPTY);
-    }
-
-    @Override
-    public @Nullable ITmfEdge edge(ITmfVertex from, ITmfVertex to, EdgeType type, String linkQualifier) {
+    public @Nullable ITmfEdge edge(ITmfVertex from, ITmfVertex to, ITmfEdgeContextState contextState, String linkQualifier) {
         if (!(from instanceof TmfVertex) || !(to instanceof TmfVertex)) {
             throw new IllegalArgumentException("Wrong vertex class"); //$NON-NLS-1$
         }
@@ -310,19 +284,19 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
         boolean toInGraph = isVertexInGraph(to);
         // Are they from the same worker? Add horizontal link
         if (fromVertex.getWorkerId() == toVertex.getWorkerId()) {
-            return append(to, type, linkQualifier);
+            return append(to, contextState, linkQualifier);
         }
         // From different workers, add a vertical link
         if (!toInGraph) {
             add(to);
         }
-        TmfEdgeInterval edge = TmfEdgeInterval.verticalEdge(fromVertex, toVertex, type, linkQualifier);
+        TmfEdgeInterval edge = TmfEdgeInterval.verticalEdge(fromVertex, toVertex, contextState, linkQualifier);
         getSHT().insert(edge);
         return edge.getEdge();
     }
 
     @Override
-    public @Nullable ITmfEdge edgeVertical(ITmfVertex from, ITmfVertex to, EdgeType type, @Nullable String linkQualifier) {
+    public @Nullable ITmfEdge edgeVertical(ITmfVertex from, ITmfVertex to, ITmfEdgeContextState contextState, @Nullable String linkQualifier) {
         if (!(from instanceof TmfVertex) || !(to instanceof TmfVertex)) {
             throw new IllegalArgumentException("Wrong vertex class"); //$NON-NLS-1$
         }
@@ -338,7 +312,7 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
             throw new IllegalArgumentException("One of the nodes in the vertical link is not in the graph"); //$NON-NLS-1$
         }
 
-        TmfEdgeInterval edge = TmfEdgeInterval.verticalEdge(fromVertex, toVertex, type, linkQualifier);
+        TmfEdgeInterval edge = TmfEdgeInterval.verticalEdge(fromVertex, toVertex, contextState, linkQualifier);
         getSHT().insert(edge);
         return edge.getEdge();
     }
@@ -404,7 +378,7 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
     public ITmfVertex getHead(ITmfVertex vertex) {
         ITmfVertex headVertex = vertex;
         ITmfEdge edgeFrom = getEdgeFrom(vertex, ITmfGraph.EdgeDirection.INCOMING_HORIZONTAL_EDGE);
-        while (edgeFrom != null && edgeFrom.getEdgeType() != EdgeType.EPS && edgeFrom.getEdgeType() != EdgeType.NO_EDGE) {
+        while (edgeFrom != null) {
             headVertex = edgeFrom.getVertexFrom();
             edgeFrom = getEdgeFrom(headVertex, ITmfGraph.EdgeDirection.INCOMING_HORIZONTAL_EDGE);
         }
@@ -553,7 +527,7 @@ public class HistoryTreeTmfGraph implements ITmfGraph {
         }
     }
 
-    private void readWorkers(GraphHistoryTree sht) throws IOException {
+    protected void readWorkers(GraphHistoryTree sht) throws IOException {
         try (FileInputStream wris = sht.supplyATReader();
             ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(wris));) {
 
